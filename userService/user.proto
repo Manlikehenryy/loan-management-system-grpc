@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+option go_package = "github.com/manlikehenryy/loan-management-system-grpc/userService/user";
+
+// User service definition
+service UserService {
+  rpc RegisterUser (RegisterUserRequest) returns (RegisterUserResponse);
+  rpc LoginUser (LoginUserRequest) returns (LoginUserResponse);
+  rpc VerifyToken (VerifyTokenRequest) returns (VerifyTokenResponse);
+}
+
+// Request message for RegisterUser
+message RegisterUserRequest {
+  string username = 1;
+  string password = 2;
+  string firstName = 3;
+  string lastName = 4;
+}
+
+// Response message for RegisterUser
+message RegisterUserResponse {
+  string message = 1;
+  bool status = 2;
+  int32 statusCode = 3;
+}
+
+// Request message for LoginUser
+message LoginUserRequest {
+  string username = 1;
+  string password = 2;
+}
+
+// Response message for LoginUser
+message LoginUserResponse {
+  string token = 1;
+  string message = 2;
+  bool status = 3;
+  int32 statusCode = 4;
+}
+
+// Request message for VerifyToken
+message VerifyTokenRequest {
+  string token = 1;
+}
+
+// Response message for VerifyToken
+message VerifyTokenResponse {
+  bool valid = 1;
+  string message = 2;
+  string userId = 3;
+  int32 statusCode = 4;
+}

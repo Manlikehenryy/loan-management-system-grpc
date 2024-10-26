@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+option go_package = "github.com/manlikehenryy/loan-management-system-grpc/loanService/loan";
+
+// Loan service definition
+service LoanService {
+  rpc ApplyLoan (ApplyLoanRequest) returns (ApplyLoanResponse);
+  rpc ApproveLoan (ApproveLoanRequest) returns (ApproveLoanResponse);
+  rpc RejectLoan (RejectLoanRequest) returns (RejectLoanResponse);
+}
+
+// Request message for ApplyLoan
+message ApplyLoanRequest {
+  string userId = 1;
+  float amount = 2;
+  int32 duration = 3;
+}
+
+// Response message for ApplyLoan
+message ApplyLoanResponse {
+  string message = 1;
+  bool status = 2;
+  int32 statusCode = 3;
+  string loandId = 4;
+}
+
+message ApproveLoanRequest {
+  string loanId = 1;
+  float approvedAmount = 2;
+  string userId = 3;
+}
+
+message ApproveLoanResponse {
+  string message = 1;
+  bool status = 2;
+  int32 statusCode = 3;
+}
+
+message RejectLoanRequest {
+  string loanId = 1;
+  string userId = 2;
+}
+
+message RejectLoanResponse {
+  string message = 1;
+  bool status = 2;
+  int32 statusCode = 3;
+}

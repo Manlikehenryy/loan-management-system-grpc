@@ -1,0 +1,1 @@
+protoc --go_out=loan --go_opt=paths=source_relative --go-grpc_out=loan --go-grpc_opt=paths=source_relative loan.proto

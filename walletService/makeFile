@@ -1,0 +1,1 @@
+protoc --go_out=wallet --go_opt=paths=source_relative --go-grpc_out=wallet --go-grpc_opt=paths=source_relative wallet.proto
