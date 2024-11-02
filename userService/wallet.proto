@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/manlikehenryy/loan-management-system-grpc/walletService/wallet";
+option go_package = "github.com/manlikehenryy/loan-management-system-grpc/userService/wallet";
 
 // Wallet service definition
 service WalletService {

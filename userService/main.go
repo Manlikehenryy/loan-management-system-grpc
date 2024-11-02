@@ -12,11 +12,16 @@ import (
 	"github.com/manlikehenryy/loan-management-system-grpc/userService/database"
 	"github.com/manlikehenryy/loan-management-system-grpc/userService/helpers"
 	pb "github.com/manlikehenryy/loan-management-system-grpc/userService/user" // Import generated protobuf code
+	walletPb "github.com/manlikehenryy/loan-management-system-grpc/userService/wallet" // Import generated protobuf code
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // User struct
@@ -34,6 +39,8 @@ type UserServiceServer struct {
 	pb.UnimplementedUserServiceServer
 }
 
+var walletServiceClient walletPb.WalletServiceClient
+
 func (user *User) SetPassword(password string) {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), 14)
 	user.Password = hashedPassword
@@ -47,7 +54,7 @@ func (user *User) ComparePassword(password string) error {
 func (s *UserServiceServer) RegisterUser(ctx context.Context, req *pb.RegisterUserRequest) (*pb.RegisterUserResponse, error) {
 	usersCollection := database.DB.Collection("users")
 
-	user := User{ Role: "admin", Username: req.GetUsername(), FirstName: req.GetFirstName(), LastName: req.GetLastName()}
+	user := User{Role: "admin", Username: req.GetUsername(), FirstName: req.GetFirstName(), LastName: req.GetLastName()}
 	user.SetPassword(req.GetPassword())
 
 	var existingUser User
@@ -62,11 +69,21 @@ func (s *UserServiceServer) RegisterUser(ctx context.Context, req *pb.RegisterUs
 		return &pb.RegisterUserResponse{Message: "Username already exists", Status: false, StatusCode: http.StatusBadRequest}, err
 	}
 
-	_, error_ := usersCollection.InsertOne(context.Background(), user)
+	result, error_ := usersCollection.InsertOne(context.Background(), user)
 	if error_ != nil {
 		log.Println("Database error:", error_)
 		return &pb.RegisterUserResponse{Message: "Failed to create account", Status: false, StatusCode: http.StatusInternalServerError}, error_
 	}
+
+	
+	createWalletReq := &walletPb.CreateWalletRequest{
+        UserId:       result.InsertedID.(primitive.ObjectID).Hex(),
+    }
+    createWalletResp, err := walletServiceClient.CreateWallet(context.Background(), createWalletReq)
+    if err != nil || createWalletResp.Status == false{
+		return &pb.RegisterUserResponse{Message: createWalletResp.Message, Status: createWalletResp.Status, StatusCode: createWalletResp.StatusCode}, err
+    }
+    
 
 	return &pb.RegisterUserResponse{Message: "User registered successfully!", Status: true, StatusCode: http.StatusOK}, nil
 }
@@ -103,16 +120,83 @@ func (s *UserServiceServer) VerifyToken(ctx context.Context, req *pb.VerifyToken
 	userIdStr, err := helpers.ParseJwt(req.GetToken())
 	if err != nil {
 
-		return &pb.VerifyTokenResponse{Valid: false, Message: "Unauthorized: Invalid JWT token", StatusCode:  http.StatusUnauthorized}, nil
+		return &pb.VerifyTokenResponse{Valid: false, Message: "Unauthorized: Invalid JWT token", StatusCode: http.StatusUnauthorized}, nil
 	}
 
 	_, err_ := primitive.ObjectIDFromHex(userIdStr)
 	if err_ != nil {
 
-		return &pb.VerifyTokenResponse{Valid: false, Message: "Unauthorized: Invalid user ID", StatusCode:  http.StatusUnauthorized}, nil
+		return &pb.VerifyTokenResponse{Valid: false, Message: "Unauthorized: Invalid user ID", StatusCode: http.StatusUnauthorized}, nil
 	}
 
-	return &pb.VerifyTokenResponse{Valid: true, Message: "token valid", UserId: userIdStr, StatusCode:  http.StatusOK}, nil
+	return &pb.VerifyTokenResponse{Valid: true, Message: "token valid", UserId: userIdStr, StatusCode: http.StatusOK}, nil
+}
+
+func (s *UserServiceServer) IsAdmin(ctx context.Context, req *pb.IsAdminRequest) (*pb.IsAdminResponse, error) {
+	userId, err_ := primitive.ObjectIDFromHex(req.GetUserId())
+	if err_ != nil {
+
+		return &pb.IsAdminResponse{Valid: false, Message: "Unauthorized: Invalid user ID", StatusCode: http.StatusUnauthorized}, nil
+	}
+
+	usersCollection := database.DB.Collection("users")
+	var user User
+	err := usersCollection.FindOne(ctx, bson.M{"_id": userId}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return &pb.IsAdminResponse{Valid: false, Message: "Unauthorized", StatusCode: http.StatusUnauthorized}, err
+		}
+		log.Println("Database error:", err)
+		return &pb.IsAdminResponse{Valid: false, Message: "Database error", StatusCode: http.StatusInternalServerError}, err
+	}
+
+	if user.Role != "admin" {
+		return &pb.IsAdminResponse{Valid: false, Message: "Unauthorized", StatusCode: http.StatusUnauthorized}, nil
+	}
+
+	return &pb.IsAdminResponse{Valid: true, Message: "Successful", StatusCode: http.StatusOK}, nil
+}
+
+func tokenInterceptor(
+	ctx context.Context,
+	req interface{},
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (interface{}, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Errorf(codes.Unauthenticated, "no metadata provided")
+	}
+
+	// Get the "authorization" metadata value
+	authHeader := md["authorization"]
+	if len(authHeader) == 0 {
+		return nil, status.Errorf(codes.Unauthenticated, "no auth token provided")
+	}
+
+	// Extract the token (remove "Bearer " prefix)
+	token := authHeader[0]
+	if len(token) < 7 || token[:7] != "Bearer " {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token format")
+	}
+	actualToken := token[7:]
+
+	if actualToken != configs.Env.TOKEN {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token")
+	}
+
+	// Continue processing the request
+	return handler(ctx, req)
+}
+
+func init(){
+	conn, err := grpc.NewClient("localhost:50053", grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        log.Fatalf("Did not connect: %v", err)
+    }
+    defer conn.Close()
+
+    walletServiceClient = walletPb.NewWalletServiceClient(conn)
 }
 
 func main() {
@@ -131,7 +215,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
+
+	s := grpc.NewServer(grpc.UnaryInterceptor(tokenInterceptor))
 	pb.RegisterUserServiceServer(s, &UserServiceServer{}) // Register UserServiceServer
 	fmt.Printf("User Service running on port %s...", port)
 	log.Fatal(s.Serve(lis))

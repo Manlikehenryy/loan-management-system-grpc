@@ -7,6 +7,7 @@ service UserService {
   rpc RegisterUser (RegisterUserRequest) returns (RegisterUserResponse);
   rpc LoginUser (LoginUserRequest) returns (LoginUserResponse);
   rpc VerifyToken (VerifyTokenRequest) returns (VerifyTokenResponse);
+  rpc IsAdmin (IsAdminRequest) returns (IsAdminResponse);
 }
 
 // Request message for RegisterUser
@@ -49,4 +50,16 @@ message VerifyTokenResponse {
   string message = 2;
   string userId = 3;
   int32 statusCode = 4;
+}
+
+// Request message for VerifyToken
+message IsAdminRequest {
+  string userId = 1;
+}
+
+// Response message for VerifyToken
+message IsAdminResponse {
+  bool valid = 1;
+  string message = 2;
+  int32 statusCode = 3;
 }
