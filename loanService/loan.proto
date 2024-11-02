@@ -28,10 +28,10 @@ message ApproveLoanRequest {
   string loanId = 1;
   float approvedAmount = 2;
   string userId = 3;
-  int32  Tenure = 4;
-  float  MonthlyRepayment = 5;
-  string EffectiveDate = 6;
-  string ExpiryDate = 7;
+  int32  tenure = 4;
+  float  monthlyRepayment = 5;
+  string effectiveDate = 6;
+  string expiryDate = 7;
 }
 
 message ApproveLoanResponse {

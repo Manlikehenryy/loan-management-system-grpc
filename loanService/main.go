@@ -9,6 +9,7 @@ import (
 
 	"github.com/manlikehenryy/loan-management-system-grpc/loanService/configs"
 	"github.com/manlikehenryy/loan-management-system-grpc/loanService/database"
+	"github.com/manlikehenryy/loan-management-system-grpc/loanService/grpcclient"
 	pb "github.com/manlikehenryy/loan-management-system-grpc/loanService/loan"
 	userPb "github.com/manlikehenryy/loan-management-system-grpc/loanService/user"
 	walletPb "github.com/manlikehenryy/loan-management-system-grpc/loanService/wallet"
@@ -17,7 +18,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -43,52 +43,71 @@ type LoanServiceServer struct {
 	pb.UnimplementedLoanServiceServer
 }
 
-var walletServiceClient walletPb.WalletServiceClient
-var userServiceClient userPb.UserServiceClient
-
 func (s *LoanServiceServer) ApplyLoan(ctx context.Context, req *pb.ApplyLoanRequest) (*pb.ApplyLoanResponse, error) {
 	loansCollection := database.DB.Collection("loans")
 
 	userId, err := primitive.ObjectIDFromHex(req.GetUserId())
 	if err != nil {
-		return &pb.ApplyLoanResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, err
+		return &pb.ApplyLoanResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, nil
 	}
 
 	loan := Loan{UserID: userId, Amount: req.GetAmount(), Status: "pending"}
 
 	result, err_ := loansCollection.InsertOne(context.Background(), loan)
 	if err_ != nil {
-		return &pb.ApplyLoanResponse{Message: "Loan application failed", Status: false, StatusCode: http.StatusInternalServerError}, err_
+		return &pb.ApplyLoanResponse{Message: "Loan application failed", Status: false, StatusCode: http.StatusInternalServerError}, nil
 	}
 	return &pb.ApplyLoanResponse{Message: "Loan application submitted", Status: true, StatusCode: http.StatusCreated, LoandId: result.InsertedID.(primitive.ObjectID).Hex()}, nil
 }
 
 func (s *LoanServiceServer) ApproveLoan(ctx context.Context, req *pb.ApproveLoanRequest) (*pb.ApproveLoanResponse, error) {
 
+	// Initialize the gRPC client
+	userServiceClient, cleanup, err := grpcclient.NewUserServiceClient(ctx)
+	if err != nil {
+		log.Fatalf("Failed to connect to UserService: %v", err)
+		return &pb.ApproveLoanResponse{Message: "Internal service error", Status: false, StatusCode: http.StatusInternalServerError}, nil
+	}
+	defer cleanup()
+
+	// Set up the context with authorization metadata
+	c := grpcclient.NewAuthContext(context.Background(), configs.Env.TOKEN)
+
 	isAdminReq := &userPb.IsAdminRequest{
 		UserId: req.UserId,
 	}
-	isAdminResp, err_ := userServiceClient.IsAdmin(context.Background(), isAdminReq)
+	isAdminResp, err_ := userServiceClient.IsAdmin(c, isAdminReq)
+
+	if isAdminResp == nil {
+		log.Println("Error in IsAdmin call:", err)
+		return &pb.ApproveLoanResponse{Message: "Unexpected service response", Status: false, StatusCode: http.StatusInternalServerError}, nil
+	}
+
 	if err_ != nil || !isAdminResp.Valid {
 
-		return &pb.ApproveLoanResponse{Message: isAdminResp.Message, Status: false, StatusCode: isAdminResp.StatusCode}, err_
+		return &pb.ApproveLoanResponse{Message: isAdminResp.Message, Status: false, StatusCode: isAdminResp.StatusCode}, nil
 	}
 
 	loansCollection := database.DB.Collection("loans")
 
+	loanId, err := primitive.ObjectIDFromHex(req.GetLoanId())
+	if err != nil {
+		return &pb.ApproveLoanResponse{Message: "Invalid loan ID", Status: false, StatusCode: http.StatusBadRequest}, nil
+	}
+
 	var existingLoan Loan
-	err := loansCollection.FindOne(context.Background(), bson.M{"_id": req.GetLoanId()}).Decode(&existingLoan)
+	err = loansCollection.FindOne(context.Background(), bson.M{"_id": loanId}).Decode(&existingLoan)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return &pb.ApproveLoanResponse{Message: "Loan not found", Status: false, StatusCode: http.StatusNotFound}, err
+			return &pb.ApproveLoanResponse{Message: "Loan not found", Status: false, StatusCode: http.StatusNotFound}, nil
 		} else {
-			return &pb.ApproveLoanResponse{Message: "Failed to approve loan", Status: false, StatusCode: http.StatusInternalServerError}, err
+			return &pb.ApproveLoanResponse{Message: "Failed to approve loan", Status: false, StatusCode: http.StatusInternalServerError}, nil
 		}
 	}
 
 	userId, err := primitive.ObjectIDFromHex(req.GetUserId())
 	if err != nil {
-		return &pb.ApproveLoanResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, err
+		return &pb.ApproveLoanResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, nil
 	}
 
 	update := bson.M{
@@ -104,50 +123,79 @@ func (s *LoanServiceServer) ApproveLoan(ctx context.Context, req *pb.ApproveLoan
 		},
 	}
 
-	loanId, err := primitive.ObjectIDFromHex(req.GetLoanId())
-	if err != nil {
-		return &pb.ApproveLoanResponse{Message: "Invalid loan ID", Status: false, StatusCode: http.StatusBadRequest}, err
-	}
+	
 
 	result, err := loansCollection.UpdateOne(context.Background(), bson.M{"_id": loanId}, update)
 	if err != nil {
 		log.Println("Database error:", err)
-		return &pb.ApproveLoanResponse{Message: "Failed to approve loan", Status: false, StatusCode: http.StatusInternalServerError}, err
+		return &pb.ApproveLoanResponse{Message: "Failed to approve loan", Status: false, StatusCode: http.StatusInternalServerError}, nil
 	}
 
 	if result.MatchedCount == 0 {
 
-		return &pb.ApproveLoanResponse{Message: "Loan not found", Status: false, StatusCode: http.StatusNotFound}, err
+		return &pb.ApproveLoanResponse{Message: "Loan not found", Status: false, StatusCode: http.StatusNotFound}, nil
 	}
+
+	// Initialize the gRPC client
+	walletServiceClient, cleanup, err := grpcclient.NewWalletServiceClient(ctx)
+	if err != nil {
+		log.Fatalf("Failed to connect to WalletService: %v", err)
+		return &pb.ApproveLoanResponse{Message: "Internal service error", Status: false, StatusCode: http.StatusInternalServerError}, nil
+	}
+	defer cleanup()
 
 	creditWalletReq := &walletPb.CreditWalletRequest{
 		UserId: existingLoan.UserID.Hex(),
 		Amount: req.ApprovedAmount,
 	}
-	creditWalletResp, err := walletServiceClient.CreditWallet(context.Background(), creditWalletReq)
+	creditWalletResp, err := walletServiceClient.CreditWallet(c, creditWalletReq)
+
+	if creditWalletResp == nil {
+		log.Println("Error in creditWallet call:", err)
+		return &pb.ApproveLoanResponse{Message: "Unexpected service response", Status: false, StatusCode: http.StatusInternalServerError}, nil
+	}
+
 	if err != nil || !creditWalletResp.Status {
 
-		return &pb.ApproveLoanResponse{Message: creditWalletResp.Message, Status: creditWalletResp.Status, StatusCode: creditWalletResp.StatusCode}, err
+		return &pb.ApproveLoanResponse{Message: creditWalletResp.Message, Status: creditWalletResp.Status, StatusCode: creditWalletResp.StatusCode}, nil
 	}
 
 	return &pb.ApproveLoanResponse{Message: "Loan approved successfully", Status: true, StatusCode: http.StatusOK}, nil
 }
 
 func (s *LoanServiceServer) RejectLoan(ctx context.Context, req *pb.RejectLoanRequest) (*pb.RejectLoanResponse, error) {
+	// Initialize the gRPC client
+	userServiceClient, cleanup, err := grpcclient.NewUserServiceClient(ctx)
+	if err != nil {
+		log.Fatalf("Failed to connect to UserService: %v", err)
+		return &pb.RejectLoanResponse{Message: "Internal service error", Status: false, StatusCode: http.StatusInternalServerError}, nil
+	}
+	defer cleanup()
+
+	// Set up the context with authorization metadata
+	c := grpcclient.NewAuthContext(context.Background(), configs.Env.TOKEN)
+
 	isAdminReq := &userPb.IsAdminRequest{
 		UserId: req.UserId,
 	}
-	isAdminResp, err_ := userServiceClient.IsAdmin(context.Background(), isAdminReq)
+
+	isAdminResp, err_ := userServiceClient.IsAdmin(c, isAdminReq)
+
+	if isAdminResp == nil {
+		log.Println("Error in IsAdmin call:", err)
+		return &pb.RejectLoanResponse{Message: "Unexpected service response", Status: false, StatusCode: http.StatusInternalServerError}, nil
+	}
+
 	if err_ != nil || !isAdminResp.Valid {
 
-		return &pb.RejectLoanResponse{Message: isAdminResp.Message, Status: false, StatusCode: isAdminResp.StatusCode}, err_
+		return &pb.RejectLoanResponse{Message: isAdminResp.Message, Status: false, StatusCode: isAdminResp.StatusCode}, nil
 	}
 
 	loansCollection := database.DB.Collection("loans")
 
 	userId, err := primitive.ObjectIDFromHex(req.GetUserId())
 	if err != nil {
-		return &pb.RejectLoanResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, err
+		return &pb.RejectLoanResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, nil
 	}
 
 	update := bson.M{
@@ -159,18 +207,18 @@ func (s *LoanServiceServer) RejectLoan(ctx context.Context, req *pb.RejectLoanRe
 
 	loanId, err := primitive.ObjectIDFromHex(req.GetLoanId())
 	if err != nil {
-		return &pb.RejectLoanResponse{Message: "Invalid loan ID", Status: false, StatusCode: http.StatusBadRequest}, err
+		return &pb.RejectLoanResponse{Message: "Invalid loan ID", Status: false, StatusCode: http.StatusBadRequest}, nil
 	}
 
 	result, err := loansCollection.UpdateOne(context.Background(), bson.M{"_id": loanId}, update)
 	if err != nil {
 		log.Println("Database error:", err)
-		return &pb.RejectLoanResponse{Message: "Failed to reject loan", Status: false, StatusCode: http.StatusInternalServerError}, err
+		return &pb.RejectLoanResponse{Message: "Failed to reject loan", Status: false, StatusCode: http.StatusInternalServerError}, nil
 	}
 
 	if result.MatchedCount == 0 {
 
-		return &pb.RejectLoanResponse{Message: "Loan not found", Status: false, StatusCode: http.StatusNotFound}, err
+		return &pb.RejectLoanResponse{Message: "Loan not found", Status: false, StatusCode: http.StatusNotFound}, nil
 	}
 
 	return &pb.RejectLoanResponse{Message: "Loan rejected successfully", Status: true, StatusCode: http.StatusOK}, nil
@@ -206,24 +254,6 @@ func tokenInterceptor(
 
 	// Continue processing the request
 	return handler(ctx, req)
-}
-
-func init() {
-	walletConn, err := grpc.NewClient("localhost:50053", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Did not connect: %v", err)
-	}
-	defer walletConn.Close()
-
-	walletServiceClient = walletPb.NewWalletServiceClient(walletConn)
-
-	userConn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Did not connect: %v", err)
-	}
-	defer userConn.Close()
-
-	userServiceClient = userPb.NewUserServiceClient(userConn)
 }
 
 func main() {

@@ -9,9 +9,9 @@ import (
 
 type Config struct {
 	PORT         string
-	MONGO_DB_URI string
 	MODE         string
 	TOKEN        string
+	APP_URL      string
 }
 
 var Env *Config
@@ -29,7 +29,7 @@ func init() {
 	}
 
 	Env.PORT = os.Getenv("PORT")
-	Env.MONGO_DB_URI = os.Getenv("MONGO_DB_URI")
+	Env.APP_URL = os.Getenv("APP_URL")
 	Env.MODE = os.Getenv("MODE")
 	Env.TOKEN = os.Getenv("TOKEN")
 }

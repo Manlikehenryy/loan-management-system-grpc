@@ -1,36 +1,10 @@
 package main
 
 import (
-	"log"
-
 	"github.com/gin-gonic/gin"
 	"github.com/manlikehenryy/loan-management-system-grpc/apiGateway/configs"
 	"github.com/manlikehenryy/loan-management-system-grpc/apiGateway/routes"
-	userPb "github.com/manlikehenryy/loan-management-system-grpc/apiGateway/user"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
-
-var userServiceClient userPb.UserServiceClient
-
-func init() {
-	// walletConn, err := grpc.NewClient("localhost:50053", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	// if err != nil {
-	// 	log.Fatalf("Did not connect: %v", err)
-	// }
-	// defer walletConn.Close()
-
-	// walletServiceClient = walletPb.NewWalletServiceClient(walletConn)
-
-	userConn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Did not connect: %v", err)
-	}
-	defer userConn.Close()
-
-	userServiceClient = userPb.NewUserServiceClient(userConn)
-}
-
 
 func main() {
 

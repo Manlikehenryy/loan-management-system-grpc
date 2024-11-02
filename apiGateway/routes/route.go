@@ -15,9 +15,7 @@ func Setup(app *gin.Engine) {
 
 	app.Use(middleware.IsAuthenticated)
 
-	app.POST("/api/url", controllers.CreateUrl)
-	app.GET("/api/url/:id", controllers.GetUrl)
-	app.PUT("/api/url/:id", controllers.UpdateUrl)
-	app.GET("/api/url", controllers.GetAllUrl)
-	app.DELETE("/api/url/:id", controllers.DeleteUrl)
+	app.POST("/api/loan/apply-loan", controllers.ApplyLoan)
+	app.PUT("/api/loan/approve-loan", controllers.ApproveLoan)
+	app.PUT("/api/loan/reject-loan", controllers.RejectLoan)
 }

@@ -36,7 +36,7 @@ func (s *WalletServiceServer) CreateWallet(ctx context.Context, req *pb.CreateWa
 
 	userId, err := primitive.ObjectIDFromHex(req.GetUserId())
 	if err != nil {
-		return &pb.CreateWalletResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, err
+		return &pb.CreateWalletResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, nil
 	}
 
 	
@@ -44,7 +44,7 @@ func (s *WalletServiceServer) CreateWallet(ctx context.Context, req *pb.CreateWa
 
 	_, err = walletsCollection.InsertOne(context.Background(), wallet)
 	if err != nil {
-		return &pb.CreateWalletResponse{Message: "Wallet creation failed", Status: false, StatusCode: http.StatusInternalServerError}, err
+		return &pb.CreateWalletResponse{Message: "Wallet creation failed", Status: false, StatusCode: http.StatusInternalServerError}, nil
 	}
 	return &pb.CreateWalletResponse{Message: "Wallet created successfully", Status: true, StatusCode: http.StatusOK}, nil
 }
@@ -54,7 +54,7 @@ func (s *WalletServiceServer) CreditWallet(ctx context.Context, req *pb.CreditWa
 
 	userId, err := primitive.ObjectIDFromHex(req.GetUserId())
 	if err != nil {
-		return &pb.CreditWalletResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, err
+		return &pb.CreditWalletResponse{Message: "Invalid user ID", Status: false, StatusCode: http.StatusBadRequest}, nil
 	}
 
 	url, err := walletsCollection.UpdateOne(
@@ -67,11 +67,11 @@ func (s *WalletServiceServer) CreditWallet(ctx context.Context, req *pb.CreditWa
 
 	if err != nil {
 		log.Println("Database error:", err)
-		return &pb.CreditWalletResponse{Message: "Failed to credit wallet", Status: false, StatusCode: http.StatusInternalServerError}, err
+		return &pb.CreditWalletResponse{Message: "Failed to credit wallet", Status: false, StatusCode: http.StatusInternalServerError}, nil
 	}
 
 	if url.MatchedCount == 0 {
-		return &pb.CreditWalletResponse{Message: "Wallet not found", Status: false, StatusCode: http.StatusNotFound}, err
+		return &pb.CreditWalletResponse{Message: "Wallet not found", Status: false, StatusCode: http.StatusNotFound}, nil
 	}
 	return &pb.CreditWalletResponse{Message: "Wallet credited successfully", Status: true, StatusCode: http.StatusOK}, nil
 }

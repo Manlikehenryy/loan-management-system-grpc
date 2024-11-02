@@ -4,127 +4,113 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/manlikehenryy/loan-management-system-grpc/apiGateway/configs"
-	"github.com/manlikehenryy/loan-management-system-grpc/apiGateway/helpers"
 	"github.com/manlikehenryy/loan-management-system-grpc/apiGateway/dto"
+	"github.com/manlikehenryy/loan-management-system-grpc/apiGateway/grpcclient"
+	"github.com/manlikehenryy/loan-management-system-grpc/apiGateway/helpers"
+	userPb "github.com/manlikehenryy/loan-management-system-grpc/apiGateway/user"
 )
 
 
 func Register(c *gin.Context) {
-	var data map[string]interface{}
+	var registerDto dto.RegisterDto
 
-	if err := c.ShouldBindJSON(&data); err != nil {
+	if err := c.ShouldBindJSON(&registerDto); err != nil {
 		log.Println("Unable to parse body:", err)
-		helpers.SendError(c, http.StatusBadRequest, "Invalid request payload")
+		helpers.SendError(c, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	password, passwordOk := data["password"].(string)
-	if !passwordOk || len(password) <= 6 {
-		helpers.SendError(c, http.StatusBadRequest, "Password must be greater than 6 characters")
+	// Initialize the gRPC client
+    userServiceClient, cleanup, err := grpcclient.NewUserServiceClient(c)
+    if err != nil {
+        log.Fatalf("Failed to connect to UserService: %v", err)
+        helpers.SendError(c, http.StatusInternalServerError, "Internal service error")
+        return
+    }
+    defer cleanup()
+
+    // Set up the context with authorization metadata
+    ctx := grpcclient.NewAuthContext(context.Background(), configs.Env.TOKEN)
+
+	registerReq := &userPb.RegisterUserRequest{
+		Username: registerDto.Username,
+		Password: registerDto.Password,
+		FirstName: registerDto.FirstName,
+		LastName: registerDto.LastName,
+	}
+
+	registerResp, err_ := userServiceClient.RegisterUser(ctx, registerReq)
+
+	if registerResp == nil{
+        helpers.SendError(c, http.StatusInternalServerError, "Unexpected service response")
+        return
+    }
+
+	if err_ != nil || !registerResp.Status {
+		helpers.SendError(c, int(registerResp.StatusCode), registerResp.Message)
 		return
 	}
 
-	email, emailOk := data["email"].(string)
-	if !emailOk || !validateEmail(strings.TrimSpace(email)) {
-		helpers.SendError(c, http.StatusBadRequest, "Invalid email address")
-		return
-	}
-
-	var existingUser models.User
-	err := usersCollection.FindOne(context.Background(), bson.M{"email": strings.TrimSpace(email)}).Decode(&existingUser)
-	if err != mongo.ErrNoDocuments {
-		if err != nil {
-			log.Println("Database error:", err)
-			helpers.SendError(c, http.StatusInternalServerError, "Failed to check email")
-			return
-		}
-		helpers.SendError(c, http.StatusBadRequest, "Email already exists")
-		return
-	}
-
-	user := models.User{
-		FirstName: data["firstName"].(string),
-		LastName:  data["lastName"].(string),
-		Phone:     data["phone"].(string),
-		Email:     strings.TrimSpace(email),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	user.SetPassword(password)
-
-	insertResult, err := usersCollection.InsertOne(context.Background(), user)
-	if err != nil {
-		log.Println("Database error:", err)
-		helpers.SendError(c, http.StatusInternalServerError, "Failed to create account")
-		return
-	}
-
-	user.ID = insertResult.InsertedID.(primitive.ObjectID)
 
 	helpers.SendJSON(c, http.StatusCreated, gin.H{
-		"data":    user,
-		"message": "Account created successfully",
+		"message": registerResp.Message,
 	})
 }
 
+// auth.controller.go
 func Login(c *gin.Context) {
-	var data map[string]string
+    var loginDto dto.LoginDto
 
-	if err := c.ShouldBindJSON(&data); err != nil {
-		log.Println("Unable to parse body:", err)
-		helpers.SendError(c, http.StatusBadRequest, "Invalid request payload")
-		return
-	}
+    if err := c.ShouldBindJSON(&loginDto); err != nil {
+        log.Println("Unable to parse body:", err)
+        helpers.SendError(c, http.StatusBadRequest, "Invalid request body")
+        return
+    }
 
-	email, emailOk := data["email"]
-	password, passwordOk := data["password"]
-	if !emailOk || !passwordOk {
-		helpers.SendError(c, http.StatusBadRequest, "Email and password are required")
-		return
-	}
+    // Initialize the gRPC client
+    userServiceClient, cleanup, err := grpcclient.NewUserServiceClient(c)
+    if err != nil {
+        log.Fatalf("Failed to connect to UserService: %v", err)
+        helpers.SendError(c, http.StatusInternalServerError, "Internal service error")
+        return
+    }
+    defer cleanup()
 
-	email = strings.TrimSpace(email)
-	filter := bson.M{"email": email}
+    // Set up the context with authorization metadata
+    ctx := grpcclient.NewAuthContext(context.Background(), configs.Env.TOKEN)
 
-	var user models.User
-	err := usersCollection.FindOne(context.Background(), filter).Decode(&user)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			helpers.SendError(c, http.StatusUnauthorized, "Incorrect email address or password")
-			return
-		}
-		log.Println("Database error:", err)
-		helpers.SendError(c, http.StatusInternalServerError, "Database error")
-		return
-	}
+    // Create the request and send it
+    loginReq := &userPb.LoginUserRequest{
+        Username: loginDto.Username,
+        Password: loginDto.Password,
+    }
 
-	if err := user.ComparePassword(password); err != nil {
-		helpers.SendError(c, http.StatusUnauthorized, "Incorrect email address or password")
-		return
-	}
+    loginResp, err := userServiceClient.LoginUser(ctx, loginReq)
 
-	token, err := helpers.GenerateJwt(user.ID.Hex())
-	if err != nil {
-		log.Println("Token generation error:", err)
-		helpers.SendError(c, http.StatusInternalServerError, "Failed to generate token")
-		return
-	}
+    // Check if loginResp is nil to avoid nil pointer dereference
+    if loginResp == nil || err != nil {
+        log.Println("Error in LoginUser call:", err)
+        helpers.SendError(c, http.StatusInternalServerError, "Unexpected service response")
+        return
+    }
 
-	maxAge := int(time.Hour * 24 / time.Second)
-	c.SetCookie("jwt", token, maxAge, "/", configs.Env.APP_URL, configs.Env.MODE == "production", true)
+    if !loginResp.Status {
+        helpers.SendError(c, int(loginResp.StatusCode), loginResp.Message)
+        return
+    }
 
-	helpers.SendJSON(c, http.StatusOK, gin.H{
-		"data":    user,
-		"message": "Logged in successfully",
-	})
+    maxAge := int(time.Hour * 24 / time.Second)
+    c.SetCookie("jwt", loginResp.Token, maxAge, "/", configs.Env.APP_URL, configs.Env.MODE == "production", true)
+
+    helpers.SendJSON(c, http.StatusOK, gin.H{
+        "message": loginResp.Message,
+    })
 }
+
 
 func Logout(c *gin.Context) {
 

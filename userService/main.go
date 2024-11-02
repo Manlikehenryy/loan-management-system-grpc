@@ -10,8 +10,9 @@ import (
 
 	"github.com/manlikehenryy/loan-management-system-grpc/userService/configs"
 	"github.com/manlikehenryy/loan-management-system-grpc/userService/database"
+	"github.com/manlikehenryy/loan-management-system-grpc/userService/grpcclient"
 	"github.com/manlikehenryy/loan-management-system-grpc/userService/helpers"
-	pb "github.com/manlikehenryy/loan-management-system-grpc/userService/user" // Import generated protobuf code
+	pb "github.com/manlikehenryy/loan-management-system-grpc/userService/user"         // Import generated protobuf code
 	walletPb "github.com/manlikehenryy/loan-management-system-grpc/userService/wallet" // Import generated protobuf code
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -19,7 +20,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -39,8 +39,6 @@ type UserServiceServer struct {
 	pb.UnimplementedUserServiceServer
 }
 
-var walletServiceClient walletPb.WalletServiceClient
-
 func (user *User) SetPassword(password string) {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), 14)
 	user.Password = hashedPassword
@@ -54,7 +52,11 @@ func (user *User) ComparePassword(password string) error {
 func (s *UserServiceServer) RegisterUser(ctx context.Context, req *pb.RegisterUserRequest) (*pb.RegisterUserResponse, error) {
 	usersCollection := database.DB.Collection("users")
 
-	user := User{Role: "admin", Username: req.GetUsername(), FirstName: req.GetFirstName(), LastName: req.GetLastName()}
+	if req.GetUsername() == "" || req.GetFirstName() == "" || req.GetLastName() == "" || req.GetPassword() == ""  {
+		return &pb.RegisterUserResponse{Message: "Missing required field(s)", Status: false, StatusCode: http.StatusBadRequest}, nil	
+	}
+
+	user := User{Role: "user", Username: req.GetUsername(), FirstName: req.GetFirstName(), LastName: req.GetLastName()}
 	user.SetPassword(req.GetPassword())
 
 	var existingUser User
@@ -63,25 +65,41 @@ func (s *UserServiceServer) RegisterUser(ctx context.Context, req *pb.RegisterUs
 		if err != nil {
 			log.Println("Database error:", err)
 
-			return &pb.RegisterUserResponse{Message: "Failed to check username", Status: false, StatusCode: http.StatusInternalServerError}, err
+			return &pb.RegisterUserResponse{Message: "Failed to check username", Status: false, StatusCode: http.StatusInternalServerError}, nil
 		}
 
-		return &pb.RegisterUserResponse{Message: "Username already exists", Status: false, StatusCode: http.StatusBadRequest}, err
+		return &pb.RegisterUserResponse{Message: "Username already exists", Status: false, StatusCode: http.StatusBadRequest}, nil
 	}
 
 	result, error_ := usersCollection.InsertOne(context.Background(), user)
 	if error_ != nil {
 		log.Println("Database error:", error_)
-		return &pb.RegisterUserResponse{Message: "Failed to create account", Status: false, StatusCode: http.StatusInternalServerError}, error_
+		return &pb.RegisterUserResponse{Message: "Failed to create account", Status: false, StatusCode: http.StatusInternalServerError}, nil
 	}
 
+	 // Initialize the gRPC client
+	 walletServiceClient, cleanup, err := grpcclient.NewWalletServiceClient(ctx)
+	 if err != nil {
+		 log.Fatalf("Failed to connect to WalletService: %v", err)
+		 return &pb.RegisterUserResponse{Message: "Internal service error", Status: false, StatusCode: http.StatusInternalServerError}, nil
+	 }
+	 defer cleanup()
+ 
+	 // Set up the context with authorization metadata
+	 c := grpcclient.NewAuthContext(context.Background(), configs.Env.TOKEN)
 	
 	createWalletReq := &walletPb.CreateWalletRequest{
         UserId:       result.InsertedID.(primitive.ObjectID).Hex(),
     }
-    createWalletResp, err := walletServiceClient.CreateWallet(context.Background(), createWalletReq)
-    if err != nil || createWalletResp.Status == false{
-		return &pb.RegisterUserResponse{Message: createWalletResp.Message, Status: createWalletResp.Status, StatusCode: createWalletResp.StatusCode}, err
+    createWalletResp, err := walletServiceClient.CreateWallet(c, createWalletReq)
+
+	if createWalletResp == nil{
+        log.Println("Error in CreateWallet call:", err)
+		return &pb.RegisterUserResponse{Message: "Unexpected service response", Status: false, StatusCode: http.StatusInternalServerError}, nil
+    }
+
+    if err != nil || !createWalletResp.Status{
+		return &pb.RegisterUserResponse{Message: createWalletResp.Message, Status: createWalletResp.Status, StatusCode: createWalletResp.StatusCode}, nil
     }
     
 
@@ -95,21 +113,21 @@ func (s *UserServiceServer) LoginUser(ctx context.Context, req *pb.LoginUserRequ
 	err := usersCollection.FindOne(ctx, bson.M{"username": req.GetUsername()}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return &pb.LoginUserResponse{Token: "", Message: "Incorrect username or password", Status: false, StatusCode: http.StatusUnauthorized}, err
+			return &pb.LoginUserResponse{Token: "", Message: "Incorrect username or password", Status: false, StatusCode: http.StatusUnauthorized}, nil
 		}
 		log.Println("Database error:", err)
-		return &pb.LoginUserResponse{Token: "", Message: "Database error", Status: false, StatusCode: http.StatusInternalServerError}, err
+		return &pb.LoginUserResponse{Token: "", Message: "Database error", Status: false, StatusCode: http.StatusInternalServerError}, nil
 	}
 
 	if err := user.ComparePassword(req.GetPassword()); err != nil {
-		return &pb.LoginUserResponse{Token: "", Message: "Incorrect username or password", Status: false, StatusCode: http.StatusUnauthorized}, err
+		return &pb.LoginUserResponse{Token: "", Message: "Incorrect username or password", Status: false, StatusCode: http.StatusUnauthorized}, nil
 	}
 
 	token, err := helpers.GenerateJwt(user.ID.Hex())
 	if err != nil {
 		log.Println("Token generation error:", err)
 
-		return &pb.LoginUserResponse{Token: token, Message: "Failed to generate token", Status: false, StatusCode: http.StatusInternalServerError}, err
+		return &pb.LoginUserResponse{Token: token, Message: "Failed to generate token", Status: false, StatusCode: http.StatusInternalServerError}, nil
 	}
 
 	return &pb.LoginUserResponse{Token: token, Message: "Logged in successfully", Status: true, StatusCode: http.StatusOK}, nil
@@ -144,10 +162,10 @@ func (s *UserServiceServer) IsAdmin(ctx context.Context, req *pb.IsAdminRequest)
 	err := usersCollection.FindOne(ctx, bson.M{"_id": userId}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return &pb.IsAdminResponse{Valid: false, Message: "Unauthorized", StatusCode: http.StatusUnauthorized}, err
+			return &pb.IsAdminResponse{Valid: false, Message: "Unauthorized", StatusCode: http.StatusUnauthorized}, nil
 		}
 		log.Println("Database error:", err)
-		return &pb.IsAdminResponse{Valid: false, Message: "Database error", StatusCode: http.StatusInternalServerError}, err
+		return &pb.IsAdminResponse{Valid: false, Message: "Database error", StatusCode: http.StatusInternalServerError}, nil
 	}
 
 	if user.Role != "admin" {
@@ -187,16 +205,6 @@ func tokenInterceptor(
 
 	// Continue processing the request
 	return handler(ctx, req)
-}
-
-func init(){
-	conn, err := grpc.NewClient("localhost:50053", grpc.WithTransportCredentials(insecure.NewCredentials()))
-    if err != nil {
-        log.Fatalf("Did not connect: %v", err)
-    }
-    defer conn.Close()
-
-    walletServiceClient = walletPb.NewWalletServiceClient(conn)
 }
 
 func main() {
