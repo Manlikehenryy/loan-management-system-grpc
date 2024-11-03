@@ -48,7 +48,7 @@ func (user *User) ComparePassword(password string) error {
 
 // Register user
 func (s *UserServiceServer) RegisterUser(ctx context.Context, req *pb.RegisterUserRequest) (*pb.RegisterUserResponse, error) {
-	usersCollection := database.DB.Collection("users")
+	usersCollection := database.GetCollection("users")
 
 	if req.GetUsername() == "" || req.GetFirstName() == "" || req.GetLastName() == "" || req.GetPassword() == "" {
 		return registerUserErrorResponse("Missing required field(s)", http.StatusBadRequest), nil
@@ -105,7 +105,7 @@ func (s *UserServiceServer) RegisterUser(ctx context.Context, req *pb.RegisterUs
 
 // Login user and generate JWT
 func (s *UserServiceServer) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (*pb.LoginUserResponse, error) {
-	usersCollection := database.DB.Collection("users")
+	usersCollection := database.GetCollection("users")
 	var user User
 	err := usersCollection.FindOne(ctx, bson.M{"username": req.GetUsername()}).Decode(&user)
 	if err != nil {
@@ -154,7 +154,7 @@ func (s *UserServiceServer) IsAdmin(ctx context.Context, req *pb.IsAdminRequest)
 		return isAdminErrorResponse("Unauthorized: Invalid user ID", http.StatusUnauthorized), nil
 	}
 
-	usersCollection := database.DB.Collection("users")
+	usersCollection := database.GetCollection("users")
 	var user User
 	err := usersCollection.FindOne(ctx, bson.M{"_id": userId}).Decode(&user)
 	if err != nil {

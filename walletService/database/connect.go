@@ -37,3 +37,7 @@ func Connect() {
 
 	log.Println("Connected to MongoDB")
 }
+
+func GetCollection(name string) *mongo.Collection{
+	return DB.Collection(name)
+}

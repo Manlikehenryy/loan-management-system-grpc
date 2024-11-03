@@ -26,7 +26,7 @@ func NewWalletServiceServer() *WalletServiceServer {
 }
 
 func (s *WalletServiceServer) CreateWallet(ctx context.Context, req *pb.CreateWalletRequest) (*pb.CreateWalletResponse, error) {
-    walletsCollection := database.DB.Collection("wallets")
+    walletsCollection := database.GetCollection("wallets")
 
     userID, err := primitive.ObjectIDFromHex(req.GetUserId())
     if err != nil {
@@ -42,7 +42,7 @@ func (s *WalletServiceServer) CreateWallet(ctx context.Context, req *pb.CreateWa
 }
 
 func (s *WalletServiceServer) CreditWallet(ctx context.Context, req *pb.CreditWalletRequest) (*pb.CreditWalletResponse, error) {
-    walletsCollection := database.DB.Collection("wallets")
+    walletsCollection := database.GetCollection("wallets")
 
     userID, err := primitive.ObjectIDFromHex(req.GetUserId())
     if err != nil {

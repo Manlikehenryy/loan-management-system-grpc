@@ -43,7 +43,7 @@ func NewLoanServiceServer() *LoanServiceServer {
 
 
 func (s *LoanServiceServer) ApplyLoan(ctx context.Context, req *pb.ApplyLoanRequest) (*pb.ApplyLoanResponse, error) {
-	loansCollection := database.DB.Collection("loans")
+	loansCollection := database.GetCollection("loans")
 
 	userId, err := primitive.ObjectIDFromHex(req.GetUserId())
 	if err != nil {
@@ -87,7 +87,7 @@ func (s *LoanServiceServer) ApproveLoan(ctx context.Context, req *pb.ApproveLoan
 		return approveLoanErrorResponse(isAdminResp.Message, int(isAdminResp.StatusCode)), nil
 	}
 
-	loansCollection := database.DB.Collection("loans")
+	loansCollection := database.GetCollection("loans")
 
 	loanId, err := primitive.ObjectIDFromHex(req.GetLoanId())
 	if err != nil {
@@ -190,7 +190,7 @@ func (s *LoanServiceServer) RejectLoan(ctx context.Context, req *pb.RejectLoanRe
 		return rejectLoanErrorResponse(isAdminResp.Message, int(isAdminResp.StatusCode)), nil
 	}
 
-	loansCollection := database.DB.Collection("loans")
+	loansCollection := database.GetCollection("loans")
 
 	userId, err := primitive.ObjectIDFromHex(req.GetUserId())
 	if err != nil {
