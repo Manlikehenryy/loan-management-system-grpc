@@ -8,10 +8,12 @@ import (
 )
 
 type Config struct {
-	PORT         string
-	MONGO_DB_URI string
-	MODE         string
-	TOKEN        string
+	PORT               string
+	MONGO_DB_URI       string
+	MODE               string
+	TOKEN              string
+	USER_SERVICE_URL   string
+	WALLET_SERVICE_URL string
 }
 
 var Env *Config
@@ -32,4 +34,6 @@ func init() {
 	Env.MONGO_DB_URI = os.Getenv("MONGO_DB_URI")
 	Env.MODE = os.Getenv("MODE")
 	Env.TOKEN = os.Getenv("TOKEN")
+	Env.USER_SERVICE_URL = os.Getenv("USER_SERVICE_URL")
+	Env.WALLET_SERVICE_URL = os.Getenv("WALLET_SERVICE_URL")
 }

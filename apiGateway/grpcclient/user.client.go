@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
+	"github.com/manlikehenryy/loan-management-system-grpc/apiGateway/configs"
 	userPb "github.com/manlikehenryy/loan-management-system-grpc/apiGateway/user" // Import your generated proto package
 )
 
@@ -14,7 +15,7 @@ import (
 func NewUserServiceClient(ctx context.Context) (userPb.UserServiceClient, func(), error) {
 
 	// Establish the connection to the UserService
-	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(configs.Env.USER_SERVICE_URL, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, err
 	}

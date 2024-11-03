@@ -9,26 +9,9 @@ git clone [https://github.com/henry-mbamalu/loan-management-system-grpc.git](htt
 
 ## After cloning, navigate to the root directory
 
-## Navigate to the apiGateway folder
+## Navigate to the walletService folder
 
-    cd apiGateway
-
-## Create a .env file, copy the content of example.env to the .env file
-
-    cp example.env .env
-
-## Install Dependencies
-
-    go get ./...
-
-## Run the app
-
-    go run main.go
-
-
-## Open a new terminal, navigate to the loanService folder
-
-    cd loanService
+    cd walletService
 
 ## Create a .env file, copy the content of example.env to the .env file
 
@@ -58,9 +41,9 @@ git clone [https://github.com/henry-mbamalu/loan-management-system-grpc.git](htt
 
     go run main.go
 
-## Open a new terminal, navigate to the walletService folder
+## Open a new terminal, navigate to the loanService folder
 
-    cd walletService
+    cd loanService
 
 ## Create a .env file, copy the content of example.env to the .env file
 
@@ -73,6 +56,26 @@ git clone [https://github.com/henry-mbamalu/loan-management-system-grpc.git](htt
 ## Run the app
 
     go run main.go
+
+
+## Open a new terminal, navigate to the apiGateway folder
+
+    cd apiGateway
+
+## Create a .env file, copy the content of example.env to the .env file
+
+    cp example.env .env
+
+## Install Dependencies
+
+    go get ./...
+
+## Run the app
+
+    go run main.go
+
+
+
 .
 
 # REST API

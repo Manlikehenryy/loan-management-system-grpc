@@ -8,11 +8,12 @@ import (
 )
 
 type Config struct {
-	PORT           string
-	MONGO_DB_URI   string
-	MODE           string
-	JWT_SECRET     string
-	TOKEN          string
+	PORT               string
+	MONGO_DB_URI       string
+	MODE               string
+	JWT_SECRET         string
+	TOKEN              string
+	WALLET_SERVICE_URL string
 }
 
 var Env *Config
@@ -34,4 +35,5 @@ func init() {
 	Env.MODE = os.Getenv("MODE")
 	Env.JWT_SECRET = os.Getenv("JWT_SECRET")
 	Env.TOKEN = os.Getenv("TOKEN")
+	Env.WALLET_SERVICE_URL = os.Getenv("WALLET_SERVICE_URL")
 }

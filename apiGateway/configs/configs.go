@@ -12,6 +12,8 @@ type Config struct {
 	MODE         string
 	TOKEN        string
 	APP_URL      string
+	USER_SERVICE_URL string
+	LOAN_SERVICE_URL string
 }
 
 var Env *Config
@@ -32,4 +34,6 @@ func init() {
 	Env.APP_URL = os.Getenv("APP_URL")
 	Env.MODE = os.Getenv("MODE")
 	Env.TOKEN = os.Getenv("TOKEN")
+	Env.USER_SERVICE_URL = os.Getenv("USER_SERVICE_URL")
+	Env.LOAN_SERVICE_URL = os.Getenv("LOAN_SERVICE_URL")
 }
