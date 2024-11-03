@@ -7,7 +7,7 @@ A microservices-based Loan Management System API built with gRPC, Golang, Gin, a
 
 git clone [https://github.com/henry-mbamalu/loan-management-system-grpc.git](https://github.com/henry-mbamalu/loan-management-system-grpc.git)
 
-## After cloning navigating to the directory
+## After cloning, navigate to the root directory
 
 ## Navigate to the apiGateway folder
 
@@ -136,10 +136,10 @@ git clone [https://github.com/henry-mbamalu/loan-management-system-grpc.git](htt
 
     token needs to be stored in cookies
 
-   {
-    "amount": 100000,
-    "duration": 6
-   }
+    {
+     "amount": 100000,
+     "duration": 6
+    }
 ### Response
 
     HTTP/1.1 201 Created
@@ -194,7 +194,7 @@ git clone [https://github.com/henry-mbamalu/loan-management-system-grpc.git](htt
     token needs to be stored in cookies
 
     {
-    "loanId": "67266b5d038812f286a83cfe"
+     "loanId": "67266b5d038812f286a83cfe"
     }
 
 ### Response
@@ -204,6 +204,6 @@ git clone [https://github.com/henry-mbamalu/loan-management-system-grpc.git](htt
     Content-Type: application/json
 
 
-   {
-    "message": "Loan rejected successfully"
-   }
+    {
+     "message": "Loan rejected successfully"
+    }
