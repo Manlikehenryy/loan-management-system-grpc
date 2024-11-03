@@ -108,7 +108,7 @@ func ApproveLoan(c *gin.Context) {
 	}
 
 
-	helpers.SendJSON(c, http.StatusCreated, gin.H{
+	helpers.SendJSON(c, http.StatusOK, gin.H{
 		"message": approveLoanResp.Message,
 	})
 }
@@ -154,7 +154,7 @@ func RejectLoan(c *gin.Context) {
 	}
 
 
-	helpers.SendJSON(c, http.StatusCreated, gin.H{
+	helpers.SendJSON(c, http.StatusOK, gin.H{
 		"message": rejectLoanResp.Message,
 	})
 }
